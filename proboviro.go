@@ -81,11 +81,19 @@ func (l Logger) Error(err error) {
 }
 
 type SingleAlert struct {
-	Description string            `json:"description"`
-	Summary     string            `json:"summary"`
-	Runbook     string            `json:"runbook"`
-	Labels      map[string]string `json:"labels"`
-	Payload     map[string]string `json:"payload"`
+	Annotations struct {
+		ActiveSince  string `json:"activeSince"`
+		AlertingRule string `json:"alertingRule"`
+		Description  string `json:"description"`
+		GeneratorURL string `json:"generatorURL"`
+		Runbook      string `json:"runbook"`
+		Summary      string `json:"summary"`
+		Value        string `json:"value"`
+	} `json:"annotations"`
+	EndsAt       string            `json:"endsAt"`
+	GeneratorURL string            `json:"generatorURL"`
+	Labels       map[string]string `json:"labels"`
+	StartsAt     string            `json:"startsAt"`
 }
 
 type Alerts struct {
@@ -100,6 +108,7 @@ func DoAlert(rw http.ResponseWriter, req *http.Request, notifier *nma.NMA) {
 		lg.Error(err)
 	}
 	for _, alert := range alerts.Alert {
+		lg.Out(fmt.Sprintf("alert struct: %+v\n", alert))
 		go HandleAlert(alert, notifier)
 	}
 }
@@ -129,10 +138,10 @@ func HandleAlert(alert SingleAlert, notifier *nma.NMA) {
 func Page(alert SingleAlert, severity int, notifier *nma.NMA) {
 	notification := nma.Notification{
 		Application: fmt.Sprintf("%s:%s", APP_NAME, alert.Labels["alertname"]),
-		Description: alert.Description,
-		Event:       alert.Summary,
+		Description: alert.Annotations.Description,
+		Event:       alert.Annotations.Summary,
 		Priority:    1,
-		URL:         alert.Payload["generatorURL"],
+		URL:         alert.Annotations.GeneratorURL,
 	}
 	if err := notifier.Notify(&notification); err != nil {
 		lg.Error(err)
@@ -140,6 +149,7 @@ func Page(alert SingleAlert, severity int, notifier *nma.NMA) {
 }
 
 func main() {
+	lg.Out(fmt.Sprintf("starting proboviro. debug: %t, key: %s, bind: %s", *flagDebug, *flagApiKey, *flagBind))
 	notifier := nma.New(*flagApiKey)
 	http.HandleFunc("/irc", func(w http.ResponseWriter, req *http.Request) {
 		DoAlert(w, req, notifier)
